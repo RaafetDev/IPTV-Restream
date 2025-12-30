@@ -1,61 +1,33 @@
-FROM ubuntu:20.04
+# Base image
+FROM php:8.1-apache
 
-# Prevent interactive prompts during installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Update and install prerequisites
-RUN apt-get update && \
-    apt-get upgrade -y --force-yes && \
-    apt-get install -y \
-    php-cli \
-    php-curl \
-    curl \
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    git \
+    libpng-dev \
+    libzip-dev \
     zip \
     unzip \
-    sudo \
-    nano \
-    dialog \
-    apt-utils \
-    software-properties-common \
-    apt-transport-https \
-    lsb-release \
-    wget \
-    ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install pdo_mysql gd zip \
+    && a2enmod rewrite
 
-# Set working directory
-WORKDIR /app
+# Set working dir
+WORKDIR /var/www/html
 
-# Set proper permissions for /tmp
-RUN chmod 777 /tmp
+# Copy source
+COPY . .
 
-# Download and install FOS-Streaming Web Platform
-RUN cd /tmp && \
-    wget -q https://raw.githubusercontent.com/haco1971/IPTV-MD/master/install_panel.php -O install_panel.php && \
-    /usr/bin/php install_panel.php
+# Install composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN composer install --no-dev --optimize-autoloader
 
-# Download and execute database installation
-RUN cd /tmp && \
-    wget -q https://raw.githubusercontent.com/haco1971/IPTV-MD/master/db_install.sh -O db_install.sh && \
-    chmod 755 db_install.sh && \
-    ./db_install.sh
+# Permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
-# Install FFmpeg and FFprobe if not present
-RUN if [ ! -f /usr/bin/ffmpeg ]; then \
-    cd /tmp && \
-    wget -q https://raw.githubusercontent.com/haco1971/IPTV-MD/master/ffmpeg.sh -O ffmpeg.sh && \
-    chmod 755 ffmpeg.sh && \
-    ./ffmpeg.sh; \
-    fi
+# Expose port
+EXPOSE 80
 
-# Clean up temporary files
-RUN rm -rf /tmp/* && \
-    rm -rf ~/bin && \
-    rm -rf ~/ffmpeg*
-
-# Expose port (adjust as needed for your application)
-EXPOSE 8000
-
-# Start command (adjust based on your application's requirements)
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "/app"]
+# Start Apache
+CMD ["apache2-foreground"]
